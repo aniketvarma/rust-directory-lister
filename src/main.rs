@@ -4,8 +4,13 @@ use std::io::{BufWriter, Write};
 fn main() {
     println!("Hello, world!");
     let arguments: Vec<String> = std::env::args().collect();
-    let path = &arguments[1];
 
+    let path = if arguments.len() == 1 {
+        String::from(".")
+    } else {
+        arguments[1].clone()
+    };
+    
     let stdout = std::io::stdout();
     let mut handle = BufWriter::new(stdout.lock());
 
