@@ -59,3 +59,17 @@ fn list_contents<W: Write>(path: &str, writer: &mut W) {
         Err(e) => writeln!(handle, "Error: {}", e).unwrap(),
     }
 }
+
+
+#[cfg(test)]
+mod tests{
+    use super::*;
+
+    #[test]
+    fn test_list_contents(){
+        let mut output = Vec::new();
+        list_contents(".", &mut output);
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.contains("src/") || output_str.contains("Cargo.toml"));
+    }
+}
