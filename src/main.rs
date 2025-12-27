@@ -1,75 +1,160 @@
-use std::fs;
-use std::io::{BufWriter, Write};
+use std::{fmt::format, time::SystemTime};
+
+use chrono::{DateTime, Local};
+use clap::Parser;
+use walkdir::{self, WalkDir};
+
+#[derive(Parser)]
+struct Arg {
+    /// Paths of directories to list
+    paths: Vec<String>,
+
+    #[arg(short, long)]
+    /// Show all files including hidden files
+    all: bool,
+
+    #[arg(short = 'R', long)]
+    /// List directories recursively
+    recursive: bool,
+
+    #[arg(short = 't', long)]
+    /// Sort files by modification time
+    sort_by_time: bool,
+
+    #[arg(short = 'r', long)]
+    /// Reverse the order of the sort
+    reverse: bool,
+
+    #[arg(short = 'S', long)]
+    /// sort by size
+    sort_by_size: bool,
+
+    #[arg(short = 'l', long)]
+    /// Long format listing
+    long_format: bool,
+}
 
 fn main() {
-    // Collect command-line arguments
-    let arguments: Vec<String> = std::env::args().collect();
+    // Parse command-line arguments
+    let arg = Arg::parse();
+
+    // Collect the provided paths into a vector
+    let paths: &[String] = &arg.paths;
+
+    let seperator = if arg.long_format { "\n" } else { " " };
 
     // If there are multiple arguments, list contents for each specified path
-    if arguments.len() != 1 {
-        for arg in arguments.iter().skip(1) {
-            // Skip the first argument which is the program name
-            println!("{}:", arg);
-            list_contents(arg, &mut std::io::stdout());
-            println!("");
+    if !paths.is_empty() {
+        for path in paths.iter() {
+            println!("{}:", path);
+            let entries = collect_entries(path, &arg); // Collect entries for the given path
+            let display_entries = should_display(entries, &arg); // filter entries based on visibility
+            let sorted_entries = sort_entries(display_entries, &arg); // sort entries based on criteria
+            let formatted_entries = format_entries(sorted_entries, &arg); // format entries for display
+            println!("{}", formatted_entries.join(seperator)); // Print formatted entries
+            println!(""); // Print a newline for separation between different paths
         }
         // If no arguments are provided, list contents of the current directory
     } else {
-        list_contents(".", &mut std::io::stdout());
+        let entries = collect_entries(".", &arg); 
+        let display_entries = should_display(entries, &arg);
+        let sorted_entries = sort_entries(display_entries, &arg);
+        let formatted_entries = format_entries(sorted_entries, &arg);
+        println!("{}", formatted_entries.join(seperator));
     }
 }
 
-/// Function to list contents of a directory
-fn list_contents<W: Write>(path: &str, writer: &mut W) {
-    
-    
+fn collect_entries(path: &str, arg: &Arg) -> Vec<Entry> {
+    let mut results = Vec::new();
 
-    // buffered writer which store all the contents before printing them to the console
-    let mut handle = BufWriter::new(writer);
+    let walker = if arg.recursive {
+        WalkDir::new(path).min_depth(1)
+    } else {
+        WalkDir::new(path).max_depth(1).min_depth(1)
+    };
 
-    match fs::read_dir(path) {
-        //read_dir gives an iterator over the entries within the directory
-        Ok(entries) => {
-            //using for loop to iterate over each entry in the directory
-            for entry in entries {
-                match entry {
-                    Ok(dir_entry) => {
-                        // Get the file type (directory or file)
-                        let file_type = dir_entry.file_type().unwrap();
+    for entry in walker {
+        match entry {
+            Ok(dir_entry) => {
+                let entry_data = Entry {
+                    name: if dir_entry.file_type().is_dir() {
+                        format!("{}/", dir_entry.file_name().to_string_lossy())
+                    } else {
+                        format!("{}", dir_entry.file_name().to_string_lossy())
+                    },
+                    modified: dir_entry
+                        .metadata()
+                        .unwrap()
+                        .modified()
+                        .unwrap_or(SystemTime::now()),
+                    size: dir_entry.metadata().unwrap().len(),
+                };
 
-                        //check if the entry is a directory or a file and write to the handle accordingly
-                        if file_type.is_dir() {
-                            // Append a '/' to directory names, to distinguish them from files
-                            // .to_string_lossy() converts OsString to String for display
-                            writeln!(handle, "{}/", dir_entry.file_name().to_string_lossy())
-                                .unwrap();
-                        } else if file_type.is_file() {
-                            writeln!(handle, "{}", dir_entry.file_name().to_string_lossy())
-                                .unwrap();
-                        }
-                    }
-
-                    Err(e) => {
-                        writeln!(handle, "Error: {}", e).unwrap();
-                    }
-                }
+                results.push(entry_data);
+            }
+            Err(e) => {
+                eprintln!("Error: {}", e);
             }
         }
-
-        Err(e) => writeln!(handle, "Error: {}", e).unwrap(),
     }
+
+    results
 }
 
+fn should_display(entries: Vec<Entry>, arg: &Arg) -> Vec<Entry> {
+    let mut result = Vec::new();
 
-#[cfg(test)]
-mod tests{
-    use super::*;
-
-    #[test]
-    fn test_list_contents(){
-        let mut output = Vec::new();
-        list_contents(".", &mut output);
-        let output_str = String::from_utf8(output).unwrap();
-        assert!(output_str.contains("src/") || output_str.contains("Cargo.toml"));
+    if arg.all {
+        result = entries
+    } else if !arg.all {
+        result = entries
+            .into_iter()
+            .filter(|entry| !entry.name.starts_with("."))
+            .collect();
     }
+
+    result
+}
+
+fn sort_entries(mut entries: Vec<Entry>, arg: &Arg) -> Vec<Entry> {
+    if arg.sort_by_time {
+        entries.sort_by(|a, b| a.modified.cmp(&b.modified));
+        if !arg.reverse {
+            entries.reverse();
+        }
+    } else if arg.sort_by_size {
+        entries.sort_by(|a, b| a.size.cmp(&b.size));
+        if !arg.reverse {
+            entries.reverse();
+        }
+    }
+    entries
+}
+
+fn format_entries(entries: Vec<Entry>, arg: &Arg) -> Vec<String> {
+    let formated_entries = entries
+        .into_iter()
+        .map(|f| {
+            if arg.long_format {
+                let datetime: DateTime<Local> = f.modified.into();
+                format!(
+                    "{:<20}  {:>10} bytes  modified: {:<15}",
+                    f.name,
+                    f.size,
+                    datetime.format("%b %d %H:%M")
+                )
+            } else {
+                format!("{}", f.name)
+            }
+        })
+        .collect();
+
+    formated_entries
+}
+
+// Struct to hold file entry information
+struct Entry {
+    name: String,
+    modified: std::time::SystemTime,
+    size: u64,
 }
