@@ -1,4 +1,4 @@
-use std::{fmt::format, time::SystemTime};
+use std::time::SystemTime;
 
 use chrono::{DateTime, Local};
 use clap::Parser;
@@ -32,6 +32,11 @@ struct Arg {
     #[arg(short = 'l', long)]
     /// Long format listing
     long_format: bool,
+
+
+    #[arg(short = 'H', long)] 
+       /// Human-readable sizes
+    human_readable: bool,
 }
 
 fn main() {
@@ -41,7 +46,7 @@ fn main() {
     // Collect the provided paths into a vector
     let paths: &[String] = &arg.paths;
 
-    let seperator = if arg.long_format { "\n" } else { " " };
+    let separator = if arg.long_format { "\n" } else { " " };
 
     // If there are multiple arguments, list contents for each specified path
     if !paths.is_empty() {
@@ -51,16 +56,16 @@ fn main() {
             let display_entries = should_display(entries, &arg); // filter entries based on visibility
             let sorted_entries = sort_entries(display_entries, &arg); // sort entries based on criteria
             let formatted_entries = format_entries(sorted_entries, &arg); // format entries for display
-            println!("{}", formatted_entries.join(seperator)); // Print formatted entries
+            println!("{}", formatted_entries.join(separator)); // Print formatted entries
             println!(""); // Print a newline for separation between different paths
         }
         // If no arguments are provided, list contents of the current directory
     } else {
-        let entries = collect_entries(".", &arg); 
+        let entries = collect_entries(".", &arg);
         let display_entries = should_display(entries, &arg);
         let sorted_entries = sort_entries(display_entries, &arg);
         let formatted_entries = format_entries(sorted_entries, &arg);
-        println!("{}", formatted_entries.join(seperator));
+        println!("{}", formatted_entries.join(separator));
     }
 }
 
@@ -106,7 +111,7 @@ fn should_display(entries: Vec<Entry>, arg: &Arg) -> Vec<Entry> {
 
     if arg.all {
         result = entries
-    } else if !arg.all {
+    } else  {
         result = entries
             .into_iter()
             .filter(|entry| !entry.name.starts_with("."))
@@ -127,34 +132,77 @@ fn sort_entries(mut entries: Vec<Entry>, arg: &Arg) -> Vec<Entry> {
         if !arg.reverse {
             entries.reverse();
         }
+    }else{
+        // Default: sort alphabetically (case-insensitive)
+        entries.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        if arg.reverse {
+            entries.reverse();
+        }
     }
     entries
 }
 
 fn format_entries(entries: Vec<Entry>, arg: &Arg) -> Vec<String> {
-    let formated_entries = entries
+    // taking each entry from the Vector and formatting it based on the long_format flag and human-readable size option
+    let formatted_entries = entries
         .into_iter()
         .map(|f| {
             if arg.long_format {
                 let datetime: DateTime<Local> = f.modified.into();
+               let size_display = if arg.human_readable {
+                    format_size(f.size)
+                } else {
+                    f.size.to_string()
+                };
                 format!(
                     "{:<20}  {:>10} bytes  modified: {:<15}",
                     f.name,
-                    f.size,
+                    size_display,
                     datetime.format("%b %d %H:%M")
                 )
             } else {
-                format!("{}", f.name)
+                f.name.to_string()
             }
         })
         .collect();
 
-    formated_entries
+    return formatted_entries;
 }
 
+// ...existing code...
+
+fn format_size(bytes: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = KB * 1024;
+    const GB: u64 = MB * 1024;
+
+    if bytes >= GB {
+        format!("{:.1}G", bytes as f64 / GB as f64)
+    } else if bytes >= MB {
+        format!("{:.1}M", bytes as f64 / MB as f64)
+    } else if bytes >= KB {
+        format!("{:.1}K", bytes as f64 / KB as f64)
+    } else {
+        format!("{}B", bytes)
+    }
+}
+
+// ...existing code...
+
 // Struct to hold file entry information
+#[derive(Debug)]
 struct Entry {
     name: String,
     modified: std::time::SystemTime,
     size: u64,
 }
+
+
+
+
+//to do : add format option for size (eg: KB, MB, GB), date format option, colorized output, symbolic links handling
+//       : add tests for each function
+//       : improve error handling and user feedback
+//       : add pagination for long listings
+//       : add support for different file attributes (like permissions, owner, group)
+//       : optimize performance for large directories
