@@ -169,7 +169,7 @@ fn format_entries(entries: Vec<Entry>, arg: &Arg) -> Vec<String> {
                     f.size.to_string()
                 };
                 format!(
-                    "{:<20}  {:>10} bytes  modified: {:<15}",
+                    "{:<20}  {:>10} size  modified: {:<15}",
                     f.name,
                     size_display,
                     datetime.format("%b %d %H:%M")
@@ -211,3 +211,201 @@ struct Entry {
     size: u64,
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_size() {
+        assert_eq!(format_size(500), "500B");
+        assert_eq!(format_size(2048), "2.0K");
+        assert_eq!(format_size(5 * 1024 * 1024), "5.0M");
+        assert_eq!(format_size(3 * 1024 * 1024 * 1024), "3.0G");
+    }
+
+    #[test]
+    fn test_sort_by_name() {
+        let mut entries = vec![
+            Entry {
+                name: "zebra".to_string(),
+                modified: SystemTime::now(),
+                size: 100,
+            },
+            Entry {
+                name: "apple".to_string(),
+                modified: SystemTime::now(),
+                size: 200,
+            },
+        ];
+        let arg = Arg {
+            paths: vec![],
+            all: false,
+            recursive: false,
+            sort_by_time: false,
+            reverse: false,
+            sort_by_size: false,
+            long_format: false,
+            human_readable: false,
+        };
+        let sorted = sort_entries(entries, &arg);
+        assert_eq!(sorted[0].name, "apple");
+        assert_eq!(sorted[1].name, "zebra");
+    }
+
+    #[test]
+    fn test_sort_by_size() {
+        let entries = vec![
+            Entry {
+                name: "small".to_string(),
+                modified: SystemTime::now(),
+                size: 100,
+            },
+            Entry {
+                name: "large".to_string(),
+                modified: SystemTime::now(),
+                size: 1000,
+            },
+        ];
+        let arg = Arg {
+            paths: vec![],
+            all: false,
+            recursive: false,
+            sort_by_time: false,
+            reverse: false,
+            sort_by_size: true,
+            long_format: false,
+            human_readable: false,
+        };
+        let sorted = sort_entries(entries, &arg);
+        assert_eq!(sorted[0].name, "large"); // Largest first
+        assert_eq!(sorted[1].name, "small");
+    }
+
+    #[test]
+    fn test_reverse_sort() {
+        let entries = vec![
+            Entry {
+                name: "a".to_string(),
+                modified: SystemTime::now(),
+                size: 100,
+            },
+            Entry {
+                name: "z".to_string(),
+                modified: SystemTime::now(),
+                size: 200,
+            },
+        ];
+        let arg = Arg {
+            paths: vec![],
+            all: false,
+            recursive: false,
+            sort_by_time: false,
+            reverse: true,
+            sort_by_size: false,
+            long_format: false,
+            human_readable: false,
+        };
+        let sorted = sort_entries(entries, &arg);
+        assert_eq!(sorted[0].name, "z");
+        assert_eq!(sorted[1].name, "a");
+    }
+
+    #[test]
+    fn test_should_display_filters_hidden() {
+        let entries = vec![
+            Entry {
+                name: ".hidden".to_string(),
+                modified: SystemTime::now(),
+                size: 100,
+            },
+            Entry {
+                name: "visible".to_string(),
+                modified: SystemTime::now(),
+                size: 200,
+            },
+        ];
+        let arg = Arg {
+            paths: vec![],
+            all: false,
+            recursive: false,
+            sort_by_time: false,
+            reverse: false,
+            sort_by_size: false,
+            long_format: false,
+            human_readable: false,
+        };
+        let filtered = should_display(entries, &arg);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].name, "visible");
+    }
+
+    #[test]
+    fn test_should_display_shows_all() {
+        let entries = vec![
+            Entry {
+                name: ".hidden".to_string(),
+                modified: SystemTime::now(),
+                size: 100,
+            },
+            Entry {
+                name: "visible".to_string(),
+                modified: SystemTime::now(),
+                size: 200,
+            },
+        ];
+        let arg = Arg {
+            paths: vec![],
+            all: true,
+            recursive: false,
+            sort_by_time: false,
+            reverse: false,
+            sort_by_size: false,
+            long_format: false,
+            human_readable: false,
+        };
+        let filtered = should_display(entries, &arg);
+        assert_eq!(filtered.len(), 2);
+    }
+
+    #[test]
+    fn test_format_entries_short() {
+        let entries = vec![Entry {
+            name: "test.txt".to_string(),
+            modified: SystemTime::now(),
+            size: 1024,
+        }];
+        let arg = Arg {
+            paths: vec![],
+            all: false,
+            recursive: false,
+            sort_by_time: false,
+            reverse: false,
+            sort_by_size: false,
+            long_format: false,
+            human_readable: false,
+        };
+        let formatted = format_entries(entries, &arg);
+        assert_eq!(formatted[0], "test.txt");
+    }
+
+    #[test]
+    fn test_format_entries_with_human_readable() {
+        let entries = vec![Entry {
+            name: "test.txt".to_string(),
+            modified: SystemTime::now(),
+            size: 2048,
+        }];
+        let arg = Arg {
+            paths: vec![],
+            all: false,
+            recursive: false,
+            sort_by_time: false,
+            reverse: false,
+            sort_by_size: false,
+            long_format: true,
+            human_readable: true,
+        };
+        let formatted = format_entries(entries, &arg);
+        assert!(formatted[0].contains("2.0K"));
+    }
+}
