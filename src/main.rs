@@ -70,11 +70,9 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-
 // Function to collect entries from a directory based on the provided path and arguments(like recursive)
 fn collect_entries(path: &str, arg: &Arg) -> Result<Vec<Entry>> {
     let mut results = Vec::new();
-
 
     // walker = interator over directory entries recursively or non-recursively based on arg.recursive
     let walker = if arg.recursive {
@@ -131,7 +129,6 @@ fn should_display(entries: Vec<Entry>, arg: &Arg) -> Vec<Entry> {
     result
 }
 
-
 // Function to sort entries based on the provided arguments
 fn sort_entries(mut entries: Vec<Entry>, arg: &Arg) -> Vec<Entry> {
     if arg.sort_by_time {
@@ -153,7 +150,6 @@ fn sort_entries(mut entries: Vec<Entry>, arg: &Arg) -> Vec<Entry> {
     }
     entries
 }
-
 
 // Function to format entries for display based on long_format and human_readable options
 fn format_entries(entries: Vec<Entry>, arg: &Arg) -> Vec<String> {
@@ -180,9 +176,8 @@ fn format_entries(entries: Vec<Entry>, arg: &Arg) -> Vec<String> {
         })
         .collect();
 
-     formatted_entries
+    formatted_entries
 }
-
 
 // Function to format file sizes into human-readable strings
 fn format_size(bytes: u64) -> String {
@@ -200,8 +195,6 @@ fn format_size(bytes: u64) -> String {
         format!("{}B", bytes)
     }
 }
-
-
 
 // Struct to hold file entry information
 #[derive(Debug)]
