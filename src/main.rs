@@ -1,7 +1,7 @@
-use std::time::SystemTime;
-
+use anyhow::{Context, Result};
 use chrono::{DateTime, Local};
 use clap::Parser;
+use std::time::SystemTime;
 use walkdir::{self, WalkDir};
 
 #[derive(Parser)]
@@ -33,13 +33,12 @@ struct Arg {
     /// Long format listing
     long_format: bool,
 
-
-    #[arg(short = 'H', long)] 
-       /// Human-readable sizes
+    #[arg(short = 'H', long)]
+    /// Human-readable sizes
     human_readable: bool,
 }
 
-fn main() {
+fn main() -> Result<()> {
     // Parse command-line arguments
     let arg = Arg::parse();
 
@@ -52,26 +51,32 @@ fn main() {
     if !paths.is_empty() {
         for path in paths.iter() {
             println!("{}:", path);
-            let entries = collect_entries(path, &arg); // Collect entries for the given path
+            let entries = collect_entries(path, &arg)
+                .with_context(|| format!("Failed to read directory: {}", path))?; // Collect entries for the given path
             let display_entries = should_display(entries, &arg); // filter entries based on visibility
             let sorted_entries = sort_entries(display_entries, &arg); // sort entries based on criteria
             let formatted_entries = format_entries(sorted_entries, &arg); // format entries for display
             println!("{}", formatted_entries.join(separator)); // Print formatted entries
-            println!(""); // Print a newline for separation between different paths
+            println!(); // Print a newline for separation between different paths
         }
         // If no arguments are provided, list contents of the current directory
     } else {
-        let entries = collect_entries(".", &arg);
+        let entries = collect_entries(".", &arg).context("failed to read current directory")?;
         let display_entries = should_display(entries, &arg);
         let sorted_entries = sort_entries(display_entries, &arg);
         let formatted_entries = format_entries(sorted_entries, &arg);
         println!("{}", formatted_entries.join(separator));
     }
+    Ok(())
 }
 
-fn collect_entries(path: &str, arg: &Arg) -> Vec<Entry> {
+
+// Function to collect entries from a directory based on the provided path and arguments(like recursive)
+fn collect_entries(path: &str, arg: &Arg) -> Result<Vec<Entry>> {
     let mut results = Vec::new();
 
+
+    // walker = interator over directory entries recursively or non-recursively based on arg.recursive
     let walker = if arg.recursive {
         WalkDir::new(path).min_depth(1)
     } else {
@@ -81,37 +86,42 @@ fn collect_entries(path: &str, arg: &Arg) -> Vec<Entry> {
     for entry in walker {
         match entry {
             Ok(dir_entry) => {
+                let meta_data = dir_entry.metadata().with_context(|| {
+                    format!("Failed to read metadata for {}", dir_entry.path().display())
+                })?;
                 let entry_data = Entry {
                     name: if dir_entry.file_type().is_dir() {
                         format!("{}/", dir_entry.file_name().to_string_lossy())
                     } else {
                         format!("{}", dir_entry.file_name().to_string_lossy())
                     },
-                    modified: dir_entry
-                        .metadata()
-                        .unwrap()
-                        .modified()
-                        .unwrap_or(SystemTime::now()),
-                    size: dir_entry.metadata().unwrap().len(),
+                    modified: meta_data.modified().with_context(|| {
+                        format!(
+                            "Failed to get modified time for {}",
+                            dir_entry.path().display()
+                        )
+                    })?,
+                    size: meta_data.len(),
                 };
 
                 results.push(entry_data);
             }
             Err(e) => {
-                eprintln!("Error: {}", e);
+                eprintln!("Warning: {}", e);
             }
         }
     }
 
-    results
+    Ok(results)
 }
 
+// Function to filter entries based on visibility (hidden or not)
 fn should_display(entries: Vec<Entry>, arg: &Arg) -> Vec<Entry> {
     let mut result = Vec::new();
 
     if arg.all {
         result = entries
-    } else  {
+    } else {
         result = entries
             .into_iter()
             .filter(|entry| !entry.name.starts_with("."))
@@ -121,6 +131,8 @@ fn should_display(entries: Vec<Entry>, arg: &Arg) -> Vec<Entry> {
     result
 }
 
+
+// Function to sort entries based on the provided arguments
 fn sort_entries(mut entries: Vec<Entry>, arg: &Arg) -> Vec<Entry> {
     if arg.sort_by_time {
         entries.sort_by(|a, b| a.modified.cmp(&b.modified));
@@ -132,7 +144,7 @@ fn sort_entries(mut entries: Vec<Entry>, arg: &Arg) -> Vec<Entry> {
         if !arg.reverse {
             entries.reverse();
         }
-    }else{
+    } else {
         // Default: sort alphabetically (case-insensitive)
         entries.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
         if arg.reverse {
@@ -142,6 +154,8 @@ fn sort_entries(mut entries: Vec<Entry>, arg: &Arg) -> Vec<Entry> {
     entries
 }
 
+
+// Function to format entries for display based on long_format and human_readable options
 fn format_entries(entries: Vec<Entry>, arg: &Arg) -> Vec<String> {
     // taking each entry from the Vector and formatting it based on the long_format flag and human-readable size option
     let formatted_entries = entries
@@ -149,7 +163,7 @@ fn format_entries(entries: Vec<Entry>, arg: &Arg) -> Vec<String> {
         .map(|f| {
             if arg.long_format {
                 let datetime: DateTime<Local> = f.modified.into();
-               let size_display = if arg.human_readable {
+                let size_display = if arg.human_readable {
                     format_size(f.size)
                 } else {
                     f.size.to_string()
@@ -166,11 +180,11 @@ fn format_entries(entries: Vec<Entry>, arg: &Arg) -> Vec<String> {
         })
         .collect();
 
-    return formatted_entries;
+     formatted_entries
 }
 
-// ...existing code...
 
+// Function to format file sizes into human-readable strings
 fn format_size(bytes: u64) -> String {
     const KB: u64 = 1024;
     const MB: u64 = KB * 1024;
@@ -187,22 +201,13 @@ fn format_size(bytes: u64) -> String {
     }
 }
 
-// ...existing code...
+
 
 // Struct to hold file entry information
 #[derive(Debug)]
 struct Entry {
     name: String,
-    modified: std::time::SystemTime,
+    modified: SystemTime,
     size: u64,
 }
 
-
-
-
-//to do : add format option for size (eg: KB, MB, GB), date format option, colorized output, symbolic links handling
-//       : add tests for each function
-//       : improve error handling and user feedback
-//       : add pagination for long listings
-//       : add support for different file attributes (like permissions, owner, group)
-//       : optimize performance for large directories
