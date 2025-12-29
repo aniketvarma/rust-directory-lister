@@ -1,7 +1,14 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Local};
 use clap::Parser;
-use std::{os::windows::fs::MetadataExt, time::SystemTime};
+use std::time::SystemTime;
+
+#[cfg(target_os = "windows")]
+use std::os::windows::fs::MetadataExt;
+
+#[cfg(target_os = "unix")]
+use std::os::unix::fs::PermissionsExt;
+
 use walkdir::{self, WalkDir};
 
 #[derive(Parser)]
@@ -88,6 +95,12 @@ fn collect_entries(path: &str, arg: &Arg) -> Result<Vec<Entry>> {
                     format!("Failed to read metadata for {}", dir_entry.path().display())
                 })?;
 
+                #[cfg(target_os = "unix")]
+                let attribute = meta_data.permissions().mode();
+
+                #[cfg(target_os = "windows")]
+                let attribute = meta_data.file_attributes();
+
                 
                 let entry_data = Entry {
                     name: if dir_entry.file_type().is_dir() {
@@ -102,7 +115,7 @@ fn collect_entries(path: &str, arg: &Arg) -> Result<Vec<Entry>> {
                         )
                     })?,
                     size: meta_data.len(),
-                    attribute: meta_data.file_attributes(),
+                    attribute,
                 };
 
                 results.push(entry_data);
@@ -205,6 +218,7 @@ fn format_size(bytes: u64) -> String {
 fn parse_attributes(attr: u32) -> String {
     let mut attributes = Vec::new();
 
+#[cfg(target_os = "windows")]
     if attr & 0x1 != 0 {
         attributes.push("READONLY");
     }
@@ -223,6 +237,12 @@ fn parse_attributes(attr: u32) -> String {
         String::from("NORMAL")
     } else {
         attributes.join(", ")
+    }
+
+      #[cfg(target_os = "unix")]
+    {
+        // Unix permissions (mode)
+        format!("{:o}", attr & 0o777) // Show as octal (e.g., 644, 755)
     }
 }
 
