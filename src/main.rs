@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Local};
 use clap::Parser;
-use std::time::SystemTime;
+use std::{os::windows::fs::MetadataExt, time::SystemTime};
 use walkdir::{self, WalkDir};
 
 #[derive(Parser)]
@@ -87,6 +87,8 @@ fn collect_entries(path: &str, arg: &Arg) -> Result<Vec<Entry>> {
                 let meta_data = dir_entry.metadata().with_context(|| {
                     format!("Failed to read metadata for {}", dir_entry.path().display())
                 })?;
+
+                
                 let entry_data = Entry {
                     name: if dir_entry.file_type().is_dir() {
                         format!("{}/", dir_entry.file_name().to_string_lossy())
@@ -100,6 +102,7 @@ fn collect_entries(path: &str, arg: &Arg) -> Result<Vec<Entry>> {
                         )
                     })?,
                     size: meta_data.len(),
+                    attribute: meta_data.file_attributes(),
                 };
 
                 results.push(entry_data);
@@ -164,11 +167,13 @@ fn format_entries(entries: Vec<Entry>, arg: &Arg) -> Vec<String> {
                 } else {
                     f.size.to_string()
                 };
+                let attributes = parse_attributes(f.attribute);
                 format!(
-                    "{:<20}  {:>10} size  modified: {:<15}",
+                    "{:<20}  {:>10} size  modified: {:<15} attributes: {}",
                     f.name,
                     size_display,
-                    datetime.format("%b %d %H:%M")
+                    datetime.format("%b %d %H:%M"),
+                    attributes
                 )
             } else {
                 f.name.to_string()
@@ -196,12 +201,39 @@ fn format_size(bytes: u64) -> String {
     }
 }
 
+
+fn parse_attributes(attr: u32) -> String {
+    let mut attributes = Vec::new();
+
+    if attr & 0x1 != 0 {
+        attributes.push("READONLY");
+    }
+    if attr & 0x2 != 0 {
+        attributes.push("HIDDEN");
+    }
+    if attr & 0x4 != 0 {
+        attributes.push("SYSTEM");
+    }
+   
+    if attr & 0x20 != 0 {
+        attributes.push("ARCHIVE");
+    }
+    
+    if attributes.is_empty() {
+        String::from("NORMAL")
+    } else {
+        attributes.join(", ")
+    }
+}
+
+
 // Struct to hold file entry information
 #[derive(Debug)]
 struct Entry {
     name: String,
     modified: SystemTime,
     size: u64,
+    attribute: u32,
 }
 
 #[cfg(test)]
@@ -218,16 +250,18 @@ mod tests {
 
     #[test]
     fn test_sort_by_name() {
-        let mut entries = vec![
+        let  entries = vec![
             Entry {
                 name: "zebra".to_string(),
                 modified: SystemTime::now(),
                 size: 100,
+                attribute: 0,
             },
             Entry {
                 name: "apple".to_string(),
                 modified: SystemTime::now(),
                 size: 200,
+                attribute: 0,
             },
         ];
         let arg = Arg {
@@ -252,11 +286,13 @@ mod tests {
                 name: "small".to_string(),
                 modified: SystemTime::now(),
                 size: 100,
+                attribute: 0,
             },
             Entry {
                 name: "large".to_string(),
                 modified: SystemTime::now(),
                 size: 1000,
+                attribute: 0,
             },
         ];
         let arg = Arg {
@@ -281,11 +317,13 @@ mod tests {
                 name: "a".to_string(),
                 modified: SystemTime::now(),
                 size: 100,
+                attribute: 0,
             },
             Entry {
                 name: "z".to_string(),
                 modified: SystemTime::now(),
                 size: 200,
+                attribute: 0,
             },
         ];
         let arg = Arg {
@@ -310,11 +348,13 @@ mod tests {
                 name: ".hidden".to_string(),
                 modified: SystemTime::now(),
                 size: 100,
+                attribute: 0,
             },
             Entry {
                 name: "visible".to_string(),
                 modified: SystemTime::now(),
                 size: 200,
+                attribute: 0,
             },
         ];
         let arg = Arg {
@@ -339,11 +379,13 @@ mod tests {
                 name: ".hidden".to_string(),
                 modified: SystemTime::now(),
                 size: 100,
+                attribute: 0,
             },
             Entry {
                 name: "visible".to_string(),
                 modified: SystemTime::now(),
                 size: 200,
+                attribute: 0,
             },
         ];
         let arg = Arg {
@@ -366,6 +408,7 @@ mod tests {
             name: "test.txt".to_string(),
             modified: SystemTime::now(),
             size: 1024,
+            attribute: 0,
         }];
         let arg = Arg {
             paths: vec![],
@@ -387,6 +430,7 @@ mod tests {
             name: "test.txt".to_string(),
             modified: SystemTime::now(),
             size: 2048,
+            attribute: 0,
         }];
         let arg = Arg {
             paths: vec![],
@@ -402,3 +446,4 @@ mod tests {
         assert!(formatted[0].contains("2.0K"));
     }
 }
+
