@@ -15,6 +15,9 @@ It's basically like the `ls` command (or `dir` on Windows) but with some cool fe
 - 🔄 Reverse the sort order
 - 📝 Long format showing file sizes and dates
 - 📏 Human-readable file sizes (like 2.5M instead of 2621440)
+- 🎨 Directories displayed in green
+- 🔒 Shows Windows file attributes (READONLY, HIDDEN, SYSTEM, ARCHIVE) or Unix permissions
+- 🌍 **Cross-platform** - Works on Windows, Linux, and macOS
 
 ## Installation
 
@@ -81,9 +84,24 @@ vw -t
 # Show oldest files first
 vw -t -r
 
-# Detailed view of specific directory
+# Detailed view of specific directory with attributes
 vw src/ -l -H
 ```
+
+### Sample Output
+
+```
+# Standard listing
+Cargo.lock  Cargo.toml  README.md  src/  target/
+
+# Long format (-l -H)
+Cargo.lock                 11.7K size  modified: Dec 27 23:07    attributes: ARCHIVE
+Cargo.toml                  235B size  modified: Dec 27 23:07    attributes: ARCHIVE
+README.md                   3.2K size  modified: Dec 29 12:19    attributes: ARCHIVE
+src/                          0B size  modified: Dec 27 17:34    attributes: NORMAL
+target/                       0B size  modified: Dec 28 19:33    attributes: NORMAL
+```
+Directories are displayed in **green** for easy identification.
 
 ## What I Learned
 
@@ -92,9 +110,25 @@ While building this, I learned:
 - Working with the file system using `walkdir`
 - Formatting dates and times with `chrono`
 - Error handling with `anyhow`
+- **Cross-platform development** - Using conditional compilation (`#[cfg]`) for Windows and Unix
+- **Platform-specific APIs** - Windows file attributes vs Unix permissions
+- Working with traits like `MetadataExt` for platform-specific features
+- ANSI color codes and the `colored` crate
 - Writing tests in Rust
 - How to sort and filter data
 - Working with structs and vectors
+
+## Platform-Specific Features
+
+### Windows
+- Displays file attributes: READONLY, HIDDEN, SYSTEM, ARCHIVE
+- Hides files that start with `.` (Unix convention) OR have the Windows HIDDEN attribute set
+- Uses Windows Console API for colored output
+
+### Unix/Linux/macOS  
+- Displays file permissions in octal format (e.g., 644, 755)
+- Hides files starting with `.` (Unix convention)
+- Uses ANSI escape codes for colored output
 
 ## Built With
 
@@ -102,6 +136,7 @@ While building this, I learned:
 - [walkdir](https://crates.io/crates/walkdir) - For walking through directories
 - [chrono](https://crates.io/crates/chrono) - For formatting dates
 - [anyhow](https://crates.io/crates/anyhow) - For easier error handling
+- [colored](https://crates.io/crates/colored) - For cross-platform colored terminal output
 
 ## Testing
 
@@ -113,10 +148,11 @@ cargo test
 ## Future Ideas
 
 Things I might add later:
-- File ownership display on Windows
-- Color coding for different file types
+- File ownership display (user/group info)
+- More color coding for different file types (executables, archives, etc.)
 - Filter by file extension
-- Show file permissions
+- Tree view for recursive listings
+- Symlink detection and display
 
 ## Contributing
 
