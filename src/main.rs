@@ -95,13 +95,21 @@ fn collect_entries(path: &str, arg: &Arg) -> Result<Vec<Entry>> {
                     format!("Failed to read metadata for {}", dir_entry.path().display())
                 })?;
 
+                let attribute: u32;
+
                 #[cfg(target_os = "unix")]
-                let attribute = meta_data.permissions().mode();
-
+                {
+                    attribute = meta_data.permissions().mode();
+                }
                 #[cfg(target_os = "windows")]
-                let attribute = meta_data.file_attributes();
+                {
+                    attribute = meta_data.file_attributes();
+                }
+                #[cfg(not(any(target_os = "unix", target_os = "windows")))]
+                {
+                    attribute = 0; // or handle as appropriate for your case
+                }
 
-                
                 let entry_data = Entry {
                     name: if dir_entry.file_type().is_dir() {
                         format!("{}/", dir_entry.file_name().to_string_lossy())
@@ -213,39 +221,42 @@ fn format_size(bytes: u64) -> String {
         format!("{}B", bytes)
     }
 }
-
-
 fn parse_attributes(attr: u32) -> String {
-    let mut attributes = Vec::new();
-
-#[cfg(target_os = "windows")]
-    if attr & 0x1 != 0 {
-        attributes.push("READONLY");
-    }
-    if attr & 0x2 != 0 {
-        attributes.push("HIDDEN");
-    }
-    if attr & 0x4 != 0 {
-        attributes.push("SYSTEM");
-    }
-   
-    if attr & 0x20 != 0 {
-        attributes.push("ARCHIVE");
-    }
-    
-    if attributes.is_empty() {
-        String::from("NORMAL")
-    } else {
-        attributes.join(", ")
-    }
-
-      #[cfg(target_os = "unix")]
+    #[cfg(target_os = "windows")]
     {
-        // Unix permissions (mode)
-        format!("{:o}", attr & 0o777) // Show as octal (e.g., 644, 755)
+        let mut attributes = Vec::new();
+
+        if attr & 0x1 != 0 {
+            attributes.push("READONLY");
+        }
+        if attr & 0x2 != 0 {
+            attributes.push("HIDDEN");
+        }
+        if attr & 0x4 != 0 {
+            attributes.push("SYSTEM");
+        }
+        if attr & 0x20 != 0 {
+            attributes.push("ARCHIVE");
+        }
+
+        if attributes.is_empty() {
+            String::from("NORMAL")
+        } else {
+            attributes.join(", ")
+        }
+    }
+
+    #[cfg(target_os = "unix")]
+    {
+        // Unix permissions (mode) - show as octal (e.g., 644, 755)
+        format!("{:o}", attr & 0o777)
+    }
+
+    #[cfg(not(any(target_os = "unix", target_os = "windows")))]
+    {
+        String::from("UNKNOWN")
     }
 }
-
 
 // Struct to hold file entry information
 #[derive(Debug)]
@@ -270,7 +281,7 @@ mod tests {
 
     #[test]
     fn test_sort_by_name() {
-        let  entries = vec![
+        let entries = vec![
             Entry {
                 name: "zebra".to_string(),
                 modified: SystemTime::now(),
@@ -466,4 +477,3 @@ mod tests {
         assert!(formatted[0].contains("2.0K"));
     }
 }
-
