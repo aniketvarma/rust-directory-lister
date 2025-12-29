@@ -1,10 +1,10 @@
 # VW - Directory Lister
 
-A simple command-line tool to list files and directories, written in Rust! This is my first Rust project where I'm learning systems programming.
+ A command-line tool to list files and directories. I wanted to learn Rust by rebuilding something familiar like `ls`, and it turned out to be way more complex than I expected!
 
 ## What Does It Do?
 
-It's basically like the `ls` command (or `dir` on Windows) but with some cool features I wanted to add while learning Rust. You can list files, sort them different ways, and see file information.
+It's basically like the `ls` command (or `dir` on Windows). Started simple, then I kept adding features as I learned more about Rust - sorting, colors, cross-platform support, etc.
 
 ## Features
 
@@ -16,7 +16,7 @@ It's basically like the `ls` command (or `dir` on Windows) but with some cool fe
 - 📝 Long format showing file sizes and dates
 - 📏 Human-readable file sizes (like 2.5M instead of 2621440)
 - 🎨 Directories displayed in green
-- 🔒 Shows Windows file attributes (READONLY, HIDDEN, SYSTEM, ARCHIVE) or Unix permissions
+- 🔒 Shows Windows file attributes (READONLY, HIDDEN, SYSTEM, ARCHIVE) or Unix permissions (only in long format)
 - 🌍 **Cross-platform** - Works on Windows, Linux, and macOS
 
 ## Installation
@@ -103,65 +103,75 @@ target/                       0B size  modified: Dec 28 19:33    attributes: NOR
 ```
 Directories are displayed in **green** for easy identification.
 
-## What I Learned
+## What I Learned (and Struggled With!)
 
-While building this, I learned:
-- How to parse command-line arguments with `clap`
-- Working with the file system using `walkdir`
-- Formatting dates and times with `chrono`
-- Error handling with `anyhow`
-- **Cross-platform development** - Using conditional compilation (`#[cfg]`) for Windows and Unix
-- **Platform-specific APIs** - Windows file attributes vs Unix permissions
-- Working with traits like `MetadataExt` for platform-specific features
-- ANSI color codes and the `colored` crate
-- Writing tests in Rust
-- How to sort and filter data
-- Working with structs and vectors
+Building this taught me a lot about Rust:
 
-## Platform-Specific Features
+**Things that clicked:**
+- `clap` made argument parsing surprisingly easy
+- `walkdir` is awesome for traversing directories
+- The borrow checker is annoying at first but actually catches real bugs
+- `Result` and `?` for error handling makes sense once you get it
 
-### Windows
-- Displays file attributes: READONLY, HIDDEN, SYSTEM, ARCHIVE
-- Hides files that start with `.` (Unix convention) OR have the Windows HIDDEN attribute set
-- Uses Windows Console API for colored output
+**Things that took forever to figure out:**
+- **Conditional compilation** - Spent way too long figuring out that `#[cfg(target_os = "windows")]` only applies to the next line, not entire blocks. Had to wrap everything in braces.
+- **Windows vs Unix differences** - Files starting with `.` aren't hidden on Windows by default! I assumed they were like Unix. Also, Windows uses "attributes" while Unix uses "permissions" - completely different systems.
+- **The `attribute` variable scope issue** - Got compile errors because the variable wasn't initialized on all platforms. Had to add a fallback for non-Windows/Unix systems.
+- **Making colored output work on Windows** - Turns out older Windows versions don't support ANSI colors. The `colored` crate handles this automatically, which is nice.
+- **Trait imports** - Had to import `MetadataExt` even though I was calling methods on `Metadata`. Still wrapping my head around how traits work.
 
-### Unix/Linux/macOS  
-- Displays file permissions in octal format (e.g., 644, 755)
-- Hides files starting with `.` (Unix convention)
-- Uses ANSI escape codes for colored output
+**Bugs I fixed:**
+- Initially forgot to add "B" suffix when not using human-readable format
+- Hidden file logic was backwards at first 
+- Directory names weren't showing in color because I was checking the wrong condition
+
+## Platform-Specific Stuff
+
+One interesting thing I learned: Windows and Unix handle file visibility completely differently!
+
+**Windows:**
+- Shows file attributes (READONLY, HIDDEN, SYSTEM, ARCHIVE)
+- I made it hide both `.` files AND files with the HIDDEN attribute to be consistent with Unix
+
+**Unix/Linux/macOS:**
+- Shows permissions in octal (644, 755, etc.)
+- Only hides files starting with `.`
+
+This was probably the most confusing part - getting cross-platform behavior right without breaking either platform.
 
 ## Built With
 
-- [clap](https://crates.io/crates/clap) - For handling command-line arguments
-- [walkdir](https://crates.io/crates/walkdir) - For walking through directories
-- [chrono](https://crates.io/crates/chrono) - For formatting dates
-- [anyhow](https://crates.io/crates/anyhow) - For easier error handling
-- [colored](https://crates.io/crates/colored) - For cross-platform colored terminal output
+- [clap](https://crates.io/crates/clap) - Command-line argument parsing
+- [walkdir](https://crates.io/crates/walkdir) - Directory traversal
+- [chrono](https://crates.io/crates/chrono) - Date/time formatting
+- [anyhow](https://crates.io/crates/anyhow) - Error handling (way better than writing custom error types)
+- [colored](https://crates.io/crates/colored) - Terminal colors that actually work on Windows
+
+## Known Issues / TODO
+
+- [ ] Long format alignment breaks with really long filenames
+
 
 ## Testing
 
-Run the tests with:
+Run tests:
 ```bash
 cargo test
 ```
 
 ## Future Ideas
 
-Things I might add later:
-- File ownership display (user/group info)
-- More color coding for different file types (executables, archives, etc.)
-- Filter by file extension
-- Tree view for recursive listings
-- Symlink detection and display
+Stuff I want to add when I have time:
+- Tree view for recursive listings (this might be hard)
+- Show total size/file count at the end
+- File ownership info (need to figure out how to get user/group on both platforms)
 
 ## Contributing
 
-This is a learning project, but feel free to open issues or PRs if you have suggestions!
+Code probably isn't perfect. If you see something that could be improved or have suggestions, feel free to open an issue!
 
 ## License
 
-Feel free to use this however you want!
+MIT - do whatever you want with it
 
 ---
-
-Made while learning Rust 🦀
