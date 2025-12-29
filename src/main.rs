@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Local};
 use clap::Parser;
+use colored::Colorize;
 use std::time::SystemTime;
 
 #[cfg(target_os = "windows")]
@@ -57,7 +58,7 @@ fn main() -> Result<()> {
     // If there are multiple arguments, list contents for each specified path
     if !paths.is_empty() {
         for path in paths.iter() {
-            println!("{}:", path);
+            println!("{}:", path.green());
             let entries = collect_entries(path, &arg)
                 .with_context(|| format!("Failed to read directory: {}", path))?; // Collect entries for the given path
             let display_entries = should_display(entries, &arg); // filter entries based on visibility
@@ -107,7 +108,7 @@ fn collect_entries(path: &str, arg: &Arg) -> Result<Vec<Entry>> {
                 }
                 #[cfg(not(any(target_os = "unix", target_os = "windows")))]
                 {
-                    attribute = 0; // or handle as appropriate for your case
+                    attribute = 0;
                 }
 
                 let entry_data = Entry {
@@ -139,18 +140,25 @@ fn collect_entries(path: &str, arg: &Arg) -> Result<Vec<Entry>> {
 
 // Function to filter entries based on visibility (hidden or not)
 fn should_display(entries: Vec<Entry>, arg: &Arg) -> Vec<Entry> {
-    let mut result = Vec::new();
-
     if arg.all {
-        result = entries
+        entries
     } else {
-        result = entries
+        entries
             .into_iter()
-            .filter(|entry| !entry.name.starts_with("."))
-            .collect();
-    }
+            .filter(|entry| {
+                // Filter dot files on all platforms
+                let is_dot_file = entry.name.starts_with(".");
 
-    result
+                #[cfg(target_os = "windows")]
+                let is_hidden = entry.attribute & 0x2 != 0; // Check HIDDEN attribute
+
+                #[cfg(not(target_os = "windows"))]
+                let is_hidden = false; // No additional hidden check on Unix
+
+                !is_dot_file && !is_hidden
+            })
+            .collect()
+    }
 }
 
 // Function to sort entries based on the provided arguments
@@ -186,7 +194,7 @@ fn format_entries(entries: Vec<Entry>, arg: &Arg) -> Vec<String> {
                 let size_display = if arg.human_readable {
                     format_size(f.size)
                 } else {
-                    f.size.to_string()
+                    format!("{}B", f.size)
                 };
                 let attributes = parse_attributes(f.attribute);
                 format!(

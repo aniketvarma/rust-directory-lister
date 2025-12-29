@@ -12,3 +12,4 @@ clap = { version = "4.5.53", features = ["derive"] }
 walkdir = "2"
 chrono = "0.4"
 anyhow = "1.0.100"
+colored = "2.1"
