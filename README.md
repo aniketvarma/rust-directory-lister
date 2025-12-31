@@ -1,6 +1,6 @@
 # VW - Directory Lister
 
- A command-line tool to list files and directories. I wanted to learn Rust by rebuilding something familiar like `ls`, and it turned out to be way more complex than I expected!
+ A command-line tool for list files and directories. I wanted to learn Rust by rebuilding something familiar like `ls`, and it turned out to be way more complex than I expected!
 
 ## What Does It Do?
 
